@@ -9,6 +9,9 @@ import collections
 import logging
 import json
 import platform
+from tempfile import mkstemp
+from shutil import move, copymode
+from os import fdopen, remove
 
 #
 # BrainZoneClassifier. Based on the code from https://github.com/mnarizzano/SEEGA
@@ -55,13 +58,10 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self.logic = None
         self._parameterNode = None
         self._updatingGUIFromParameterNode = False
-        self._bool_plan = False
+        self._dir_chosen = "C:/Program Files (x86)/Viewsonic/vCastSender/vCastSender.exe"
+        self._tmp_dir = ""
+        self._GUI_added = False
         self._Nodes_selected = False
-        self.lutPath = (self.resourcePath('Data/FreeSurferColorLUT20060522.txt'),
-                        self.resourcePath('Data/FreeSurferColorLUT20120827.txt'),
-                        self.resourcePath('Data/FreeSurferColorLUT20150729.txt')
-                        )
-        print(self.lutPath)
         # (os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/FreeSurferColorLUT20060522.txt'), \
         #                 os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/FreeSurferColorLUT20120827.txt'), \
         #                 os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/FreeSurferColorLUT20150729.txt'))
@@ -76,8 +76,6 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self.modifyWindowUI()
 
         self._loadUI()
-        self.ui.inputParcelsSelector.setMRMLScene(slicer.mrmlScene)
-        self.ui.inputFiducialSelector.setMRMLScene(slicer.mrmlScene)
         self.logic = BrainZoneClassifierLogic()
 
         # Connections
@@ -89,9 +87,6 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         uiWidget = slicer.util.loadUI(self.resourcePath('UI/BrainZoneClassifier.ui'))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
-        list_lut = ['FreeSurferColorLUT20060522', 'FreeSurferColorLUT20120827', 'FreeSurferColorLUT20150729']
-        self.ui.planName.addItems(['Select LUT file']+list_lut)
-        self.ui.planName.setCurrentIndex(self.ui.planName.findText('Select LUT file'))
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -107,10 +102,8 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
-        self.ui.inputParcelsSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.inputFiducialSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.planName.connect('currentIndexChanged(int)', self.onPlanChange)
-        print('ca')
+        self.ui.vCastSenderSelector.connect("currentPathChanged(QString)", self.onDirectoryChange)
+        # print('ca')
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
@@ -164,8 +157,8 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
         """
 
-        if inputParameterNode:
-            self.logic.setDefaultParameters(inputParameterNode)
+        # if inputParameterNode:
+        #     self.logic.setDefaultParameters(inputParameterNode)
 
         # Unobserve previously selected parameter node and add an observer to the newly selected.
         # Changes of parameter node are observed so that whenever parameters are changed by a script or any other module
@@ -192,23 +185,18 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self._updatingGUIFromParameterNode = True
 
         # Update node selectors and sliders
-        self.ui.inputParcelsSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputParcel"))
-        self.ui.inputFiducialSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputFiducial"))
+        # self.ui.vCastSenderSelector.setCurrentNode(self._parameterNode.GetNodeReference("vCastSender"))
         print('aqui')
 
         # Update buttons states and tooltips
-        inputParcel = self._parameterNode.GetNodeReference("InputParcel")
-        inputFiducial = self._parameterNode.GetNodeReference("InputFiducial")
-        lut_input = self.ui.planName.currentIndex
+        vCastSender = self._parameterNode.GetNodeReference("vCastSender")
         # Condition to change button: self._bool_plan
         # Set state of apply button
-        if inputParcel and inputFiducial:
-            self._Nodes_selected = True
-            if self._bool_plan:
-                self.ui.applyButton.toolTip = "Extract positions"
-                self.ui.applyButton.enabled = True
+        if vCastSender:
+            self.ui.applyButton.toolTip = "Extract positions"
+            self.ui.applyButton.enabled = True
         else:
-            self.ui.applyButton.toolTip = "Select the two required inputs"
+            self.ui.applyButton.toolTip = "Input a path for vCastSender"
             self.ui.applyButton.enabled = False
             self._Nodes_selected = False
 
@@ -218,25 +206,15 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
 
         # All the GUI updates are done
         self._updatingGUIFromParameterNode = False
-    
-    def onPlanChange(self):
-        """
-        This method is called whenever plan object is changed.
-        The module GUI is updated to show the current state of the parameter node.
-        """
-        if self._parameterNode is None or self._updatingGUIFromParameterNode:
-            print('lolo')
-            return
-        # Set state of button
-        if self.ui.planName.currentIndex != 0:
-            self._bool_plan = True
-            if self._Nodes_selected:
-                self.ui.applyButton.toolTip = "Extract positions"
-                self.ui.applyButton.enabled = True
-        else: # The button must be disabled if the condition is not met
-            self.ui.applyButton.toolTip = "Select the two required inputs"
+
+    def onDirectoryChange(self):
+        self._tmp_dir = str(self.ui.vCastSenderSelector.currentPath)
+        if (len(self._tmp_dir)>0 and os.path.isfile(self._tmp_dir)) and self._tmp_dir.endswith('vCastSender.exe'):
+            self.ui.applyButton.toolTip = "Set directory"
+            self.ui.applyButton.enabled = True
+        else:
+            self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
             self.ui.applyButton.enabled = False
-            self._bool_plan = False
 
     def updateParameterNodeFromGUI(self, caller=None, event=None):
         """
@@ -249,9 +227,7 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
 
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
-        self._parameterNode.SetNodeReferenceID("InputParcel", self.ui.inputParcelsSelector.currentNodeID)
-        self._parameterNode.SetNodeReferenceID("InputFiducial", self.ui.inputFiducialSelector.currentNodeID)
-        self._parameterNode.SetParameter("LUT", self.ui.planName.currentText)
+        self._parameterNode.SetNodeReferenceID("vCastSender", self.ui.vCastSenderSelector.currentNodeID)
 
         self._parameterNode.EndModify(wasModified)
 
@@ -259,29 +235,47 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
     ###  onZoneButton                                                                 #####
     #######################################################################################
     def onApplyButton(self):
+        pythonScriptPath = os.path.dirname(slicer.util.modulePath(self.moduleName))+'/BrainZoneClassifier.py'
+        # Update directory for widget
+        self._dir_chosen = self._tmp_dir
         slicer.util.showStatusMessage("START Zone Detection")
         print ("RUN Zone Detection Algorithm")
-        BrainZoneClassifierLogic().runZoneDetection(self.ui.inputParcelsSelector.currentNode(), \
-                                                  self.ui.inputFiducialSelector.currentNode(), \
-                                                  self.lutPath, self.ui.planName.currentIndex)
+        BrainZoneClassifierLogic().runZoneDetection(str(self.ui.vCastSenderSelector.currentPath), pythonScriptPath)
         print ("END Zone Detection Algorithm")
         slicer.util.showStatusMessage("END Zone Detection")
     
     def modifyWindowUI(self):
         mainToolBar = slicer.util.findChild(slicer.util.mainWindow(), 'ModuleToolBar')
+        add_widget = True
+        for element in mainToolBar.actions():
+            if element.text == "vCastSender":
+                add_widget = False
+        if add_widget:        
+            moduleIcon = qt.QIcon(self.resourcePath('Icons/BrainZoneClassifier.png'))
+            self.StyleAction = mainToolBar.addAction(moduleIcon, "vCastSender")
+            self.StyleAction.triggered.connect(self.toggleStyle)
         
-        moduleIcon = qt.QIcon(self.resourcePath('Icons/BrainZoneClassifier.png'))
-        self.StyleAction = mainToolBar.addAction(moduleIcon, "")
-        self.StyleAction.triggered.connect(self.toggleStyle)
-
     def toggleStyle(self):
         print('aqui slicer')
-        command_to_execute = [r"C:\Program Files (x86)\Viewsonic\vCastSender\vCastSender.exe"]
-        import subprocess
-        subprocess.Popen(
-        command_to_execute, shell = True
-        )
-
+        msgbox = qt.QMessageBox()
+        # font = qt.QFont()
+        # font.setBold(True)
+        msgbox.setStyleSheet("QLabel{min-width: 700px;}")
+        msgbox.setWindowTitle("vCastSender will open.")
+        msgbox.setInformativeText("After vCastSender is opened, click 'Device List' and choose your ViewSonic device.")
+        msgbox.setStandardButtons(qt.QMessageBox.Cancel | qt.QMessageBox.Ok)
+        msgbox.setDefaultButton(qt.QMessageBox.Ok)
+        ret = msgbox.exec()
+        if ret == qt.QMessageBox.Ok and len(self._dir_chosen)>0:
+            try:
+                import subprocess
+                subprocess.Popen(
+                self._dir_chosen, shell = True
+                )
+            except:
+                slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
+        else:
+            slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
 
 #########################################################################################
 ####                                                                                 ####
@@ -303,183 +297,40 @@ class BrainZoneClassifierLogic(ScriptedLoadableModuleLogic):
         """
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
+
+    def runZoneDetection(self, vCastSenderPath, pythonScriptPath):
+        print(f'Path: {vCastSenderPath}')
+        line_to_replace = 'self._dir_chosen = ""'
+        replacement = f'self._dir_chosen = "{vCastSenderPath}"'
+        print(type(vCastSenderPath))
+        print(type(replacement))
+        print((pythonScriptPath, line_to_replace, replacement))
+        self.replacer(pythonScriptPath, line_to_replace, replacement)
     
-    def set_colors(self, colorTableNode, lut_file):
-        with open(lut_file, 'r') as f:
-            raw_lut = f.readlines()
-
-        # read and process line by line
-        # label_map = pd.DataFrame(columns=['Label', 'R', 'G', 'B'])
-        for line in raw_lut:
-            # Remove empty spaces
-            line = line.strip()
-            if not (line.startswith('#') or not line):
-                s = line.split()
-                # info = list(filter(None, info))
-                # id = int(s[0])
-                info_s = {
-                    'id': int(s[0]),
-                    'Label': s[1],
-                    'R': int(s[2]),
-                    'G': int(s[3]),
-                    'B': int(s[4]),
-                    'A': int(s[5])
-                }
-                colorTableNode.SetColor(int(s[0]), s[1], int(s[2]), int(s[3]), int(s[4]), int(s[5]))
-                # info_s['A'] = 0 if (info_s['R']==0 & info_s['G']==0 & info_s['B']==0) else 255
-            #     info_s = pd.DataFrame(info_s, index=[id])
-            #     label_map = pd.concat([label_map,info_s], axis=0)
-            # label_map[['R','G','B']] = label_map[['R','G','B']].astype('int64')
-
-        return colorTableNode
-
-    def runZoneDetection(self, parc, fids, colorLut, lutIdx):
-        print(f'Parcellation file: {parc}')
-        print(f'Fiducial file: {fids}')
-        print(f'LUT list: {colorLut}')
-        print(f'LUT id: {lutIdx}')
-        # Convert volume to label map
-        label_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
-        label_node.SetName('aparc+seg')
-        volumes_logic = slicer.modules.volumes.logic()
-        volumes_logic.CreateLabelVolumeFromVolume(slicer.mrmlScene, label_node, parc)
-        # Convert label map to segmentation
-        seg = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
-        
-        colorTableNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLColorTableNode")
-        colorTableNode.SetTypeToUser()
-        colorTableNode.HideFromEditorsOff()  # make the color table selectable in the GUI outside Colors module
-        print('1')
-        slicer.mrmlScene.AddNode(colorTableNode); colorTableNode.UnRegister(None)
-        print('2')
-        colorTableNode.SetNumberOfColors(14175+1) # Hard coded. Needs to be updated
-        print('3')
-        colorTableNode.SetNamesInitialised(True) # prevent automatic color name generation
-        print('4')
-        colorTableNode = self.set_colors(colorTableNode, colorLut[lutIdx-1])
-        print('5')
-        label_node.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
-        slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(label_node, seg)
-        seg.CreateClosedSurfaceRepresentation()
-        # Delete previous volume
-        slicer.mrmlScene.RemoveNode(parc)
-        slicer.mrmlScene.RemoveNode(label_node)
-    #     # initialize variables that will hold the number of fiducials 14175
-    #     nFids = fids.GetNumberOfFiducials()
-    #     # the volumetric atlas
-    #     atlas = slicer.util.array(inputAtlas.GetName())
-    #     # an the transformation matrix from RAS coordinte to Voxels
-    #     ras2vox_atlas = vtk.vtkMatrix4x4()
-    #     inputAtlas.GetRASToIJKMatrix(ras2vox_atlas)
-
-    #     # read freesurfer color LUT. It could possibly
-    #     # already exists within 3DSlicer modules
-    #     # but in python was too easy to read if from scratch that I simply
-    #     # read it again.
-    #     # FSLUT will hold for each brain area its tag and name
-    #     FSLUT = {}
-    #     with open(colorLut[lutIdx], 'r') as f:
-    #         for line in f:
-    #             if not re.match('^#', line) and len(line) > 10:
-    #                 lineTok = re.split('\s+', line)
-    #                 FSLUT[int(lineTok[0])] = lineTok[1]
-
-    #     with open(os.path.join(os.path.dirname(__file__), './Resources/parc_fullnames.json')) as dataParcNames:
-    #         parcNames = json.load(dataParcNames)
-
-    #     with open(os.path.join(os.path.dirname(__file__), './Resources/parc_shortnames.json')) as dataParcAcronyms:
-    #         parcAcronyms = json.load(dataParcAcronyms)
-
-    #     # Initialize the progress bar pb
-    #     self.pb.setRange(0, nFids)
-    #     self.pb.show()
-    #     self.pb.setValue(0)
-
-    #     # Update the app process events, i.e. show the progress of the
-    #     # progress bar
-    #     slicer.app.processEvents()
-
-    #     listParcNames = [x for v in parcNames.values() for x in v]
-    #     listParcAcron = [x for v in parcAcronyms.values() for x in v]
-
-    #     for i in xrange(nFids):
-    #         # update progress bar
-    #         self.pb.setValue(i + 1)
-    #         slicer.app.processEvents()
-
-    #         # Only for Active Fiducial points the GMPI is computed
-    #         if fids.GetNthFiducialSelected(i) == True:
-
-    #             # instantiate the variable which holds the point
-    #             currContactCentroid = [0, 0, 0]
-
-    #             # copy current position from FiducialList
-    #             fids.GetNthFiducialPosition(i, currContactCentroid)
-
-    #             # append 1 at the end of array before applying transform
-    #             currContactCentroid.append(1)
-
-    #             # transform from RAS to IJK
-    #             voxIdx = ras2vox_atlas.MultiplyFloatPoint(currContactCentroid)
-    #             voxIdx = numpy.round(numpy.array(voxIdx[:3])).astype(int)
-
-    #             # build a -sideLength/2:sideLength/2 linear mask
-    #             mask = numpy.arange(int(-numpy.floor(sideLength / 2)), int(numpy.floor(sideLength / 2) + 1))
-
-    #             # get Patch Values from loaded Atlas in a sideLenght**3 region around
-    #             # contact centroid and extract the frequency for each unique
-    #             # patch Value present in the region
-
-    #             [X, Y, Z] = numpy.meshgrid(mask, mask, mask)
-    #             maskVol = numpy.sqrt(X ** 2 + Y ** 2 + Z ** 2) <= numpy.floor(sideLength / 2)
-
-    #             X = X[maskVol] + voxIdx[0]
-    #             Y = Y[maskVol] + voxIdx[1]
-    #             Z = Z[maskVol] + voxIdx[2]
-
-    #             patchValues = atlas[Z, Y, X]
-
-    #             # Find the unique values on the matrix above
-    #             uniqueValues = numpy.unique(patchValues)
-
-    #             # Flatten the patch value and create a tuple
-    #             patchValues = tuple(patchValues.flatten(1))
-
-    #             voxWhite = patchValues.count(2) + patchValues.count(41)
-    #             voxGray = len(patchValues) - voxWhite
-    #             PTD = float(voxGray - voxWhite) / (voxGray + voxWhite)
-
-    #             # Create an array of frequency for each unique value
-    #             itemfreq = [patchValues.count(x) for x in uniqueValues]
-
-    #             # Compute the max frequency
-    #             totPercentage = numpy.sum(itemfreq)
-
-    #             # Recover the real patch names
-    #             patchNames = [re.sub('((ctx_.h_)|(Right|Left)-(Cerebral-)?)', '', FSLUT[pValues]) for pValues in uniqueValues]
-    #             patchAcron = list()
-    #             for currPatchName in patchNames:
-    #                 currPatchAcron = ''
-    #                 for name, acron in zip(listParcNames, listParcAcron):
-    #                     if currPatchName == name:
-    #                         currPatchAcron = acron
-
-    #                 if currPatchAcron:
-    #                     patchAcron.append(currPatchAcron)
-    #                 else:
-    #                     patchAcron.append(currPatchName)
-
-    #             # Create the zones
-    #             parcels = dict(zip(itemfreq, patchAcron))
-
-    #             # prepare parcellation string with percentage of values
-    #             # within the ROI centered in currContactCentroid
-    #             # [round( float(k) / totPercentage * 100 ) for k,v in parcels.iteritems()]
-    #             ordParcels = collections.OrderedDict(sorted(parcels.items(), reverse=True))
-    #             anatomicalPositionsString = [','.join([v, str(round(float(k) / totPercentage * 100))]) for k, v in
-    #                                          ordParcels.iteritems()]
-    #             anatomicalPositionsString.append('PTD, {:.2f}'.format(PTD))
-
-    #             # Preserve if some old description was already there
-    #             fids.SetNthMarkupDescription(i, fids.GetNthMarkupDescription(i) + " " + ','.join(
-    #                 anatomicalPositionsString))
+    def replacer(self, file_path, pattern, subst):
+        #Create temp file to write updates
+        fh, abs_path = mkstemp()
+        with fdopen(fh,'w') as new_file:
+            with open(file_path) as old_file:
+                cond = True # Condition to only replace first match
+                i = 0 # id to avoid touching this function
+                for line in old_file:
+                    tmp_line = line.replace(pattern, subst)
+                    # Get new line based on conditions
+                    if cond and (i<280):
+                        tmp_line = line.replace(pattern, subst)
+                        # Update condition
+                        if line != tmp_line:
+                            cond = False
+                    else:
+                        tmp_line = line
+                    # Write line
+                    new_file.write(tmp_line)
+                    i +=1
+                    
+        #Copy the file permissions from the old file to the new file
+        copymode(file_path, abs_path)
+        #Remove original file
+        remove(file_path)
+        #Move new file
+        move(abs_path, file_path)

@@ -20,19 +20,14 @@
       <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
-         <string>Volumetric parcels:</string>
+         <string>Path to vCastSender:</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="qMRMLNodeComboBox" name="inputParcelsSelector">
-        <property name="toolTip">
-         <string>Pick the volumetric Atlas</string>
-        </property>
-        <property name="nodeTypes">
-         <stringlist>
-          <string>vtkMRMLScalarVolumeNode</string>
-         </stringlist>
+       <widget class="ctkPathLineEdit" name="vCastSenderSelector">
+        <property name="vCastSender">
+         <string>Input vCastSender path</string>
         </property>
         <property name="showChildNodeTypes">
          <bool>false</bool>
@@ -44,63 +39,10 @@
          <bool>false</bool>
         </property>
         <property name="noneEnabled">
-         <bool>true</bool>
+         <bool>false</bool>
         </property>
         <property name="selectNodeUponCreation">
          <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>Fiducial file:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="qMRMLNodeComboBox" name="inputFiducialSelector">
-        <property name="toolTip">
-         <string>Select a fiducial list</string>
-        </property>
-        <property name="nodeTypes">
-         <stringlist>
-          <string>vtkMRMLTableNode</string>
-         </stringlist>
-        </property>
-        <property name="showChildNodeTypes">
-         <bool>false</bool>
-        </property>
-        <property name="addEnabled">
-         <bool>false</bool>
-        </property>
-        <property name="removeEnabled">
-         <bool>false</bool>
-        </property>
-        <property name="noneEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="selectNodeUponCreation">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>LUT file:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QComboBox" name="planName">
-        <property name="geometry">
-            <rect>
-            <x>190</x>
-            <y>510</y>
-            <width>69</width>
-            <height>22</height>
-            </rect>
         </property>
        </widget>
       </item>
