@@ -54,7 +54,7 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic = None
         self._parameterNode = None
         self._updatingGUIFromParameterNode = False
-        self._dir_chosen = "C:/Program Files (x86)/Viewsonic/vCastSender/vCastSender.exe"
+        self._dir_chosen = ""
         self._tmp_dir = ""
         self._GUI_added = False
         self._Nodes_selected = False
