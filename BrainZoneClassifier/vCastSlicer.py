@@ -14,30 +14,26 @@ from shutil import move, copymode
 from os import fdopen, remove
 
 #
-# BrainZoneClassifier. Based on the code from https://github.com/mnarizzano/SEEGA
+# vCastSlicer. Based on the code from https://github.com/mnarizzano/SEEGA
 #
 
-class BrainZoneClassifier(ScriptedLoadableModule):
+class vCastSlicer(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
-        self.parent.title = "Brain Zone Classifier"
-        self.parent.categories = ["SpectralSEEG"]
+        self.parent.title = "vCastSlicer"
+        self.parent.categories = ["Multiviews"]
         self.parent.dependencies = []
         self.parent.contributors = ["Mauricio Cespedes Tenorio (Western University)"]
         self.parent.helpText = """
     This tool localize the brain zone of a set of points choosen from a markups 
     """
         self.parent.acknowledgementText = """
-This file was originally developed by G. Arnulfo (Univ. Genoa) & M. Narizzano (Univ. Genoa) as part
-of the module <a href="https://github.com/mnarizzano/SEEGA">SEEG Assistant</a>.
-Refer to the following publication: 
-Narizzano M., Arnulfo G., Ricci S., Toselli B., Canessa A., Tisdall M., Fato M. M., 
-Cardinale F. “SEEG Assistant: a 3DSlicer extension to support epilepsy surgery” 
-BMC Bioinformatics (2017) doi;10.1186/s12859-017-1545-8, In Press
+This module was originally developed by Mauricio Cespedes Tenorio (Western University) as part
+of the extension <a href="https://github.com/mnarizzano/SEEGA">Multiviews</a>.
 """ 
 
 
@@ -45,7 +41,7 @@ BMC Bioinformatics (2017) doi;10.1186/s12859-017-1545-8, In Press
 # Brain Zone DetectorWidget
 #
 
-class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
+class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     """Uses ScriptedLoadableModuleWidget base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
@@ -62,10 +58,6 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self._tmp_dir = ""
         self._GUI_added = False
         self._Nodes_selected = False
-        # (os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/FreeSurferColorLUT20060522.txt'), \
-        #                 os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/FreeSurferColorLUT20120827.txt'), \
-        #                 os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/FreeSurferColorLUT20150729.txt'))
-        #                 #os.path.join(slicer.app.slicerHome,'NA-MIC/Extensions-30893/SlicerFreeSurfer/share/Slicer-5.0/qt-loadable-modules/FreeSurferImporter/Simple_surface_labels2002.txt'))
 
     def setup(self):
         """
@@ -76,7 +68,7 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self.modifyWindowUI()
 
         self._loadUI()
-        self.logic = BrainZoneClassifierLogic()
+        self.logic = vCastSlicerLogic()
 
         # Connections
         self._setupConnections()
@@ -84,9 +76,17 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
     def _loadUI(self):
         # Load widget from .ui file (created by Qt Designer).
         # Additional widgets can be instantiated manually and added to self.layout.
-        uiWidget = slicer.util.loadUI(self.resourcePath('UI/BrainZoneClassifier.ui'))
+        uiWidget = slicer.util.loadUI(self.resourcePath('UI/vCastSlicer.ui'))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
+        if (len(self._dir_chosen)>0 and os.path.isfile(self._dir_chosen)) and self._dir_chosen.endswith('vCastSender.exe'):
+            self.ui.vCastSenderSelector.setCurrentPath(self._dir_chosen)
+            self.ui.applyButton.toolTip = "Set directory"
+            self.ui.applyButton.enabled = True
+        else:
+            self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
+            self.ui.applyButton.enabled = False
+            
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -184,22 +184,6 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         # Make sure GUI changes do not call updateParameterNodeFromGUI (it could cause infinite loop)
         self._updatingGUIFromParameterNode = True
 
-        # Update node selectors and sliders
-        # self.ui.vCastSenderSelector.setCurrentNode(self._parameterNode.GetNodeReference("vCastSender"))
-        print('aqui')
-
-        # Update buttons states and tooltips
-        vCastSender = self._parameterNode.GetNodeReference("vCastSender")
-        # Condition to change button: self._bool_plan
-        # Set state of apply button
-        if vCastSender:
-            self.ui.applyButton.toolTip = "Extract positions"
-            self.ui.applyButton.enabled = True
-        else:
-            self.ui.applyButton.toolTip = "Input a path for vCastSender"
-            self.ui.applyButton.enabled = False
-            self._Nodes_selected = False
-
         # if inputVolume:
         #     self.ui.outputVolumeSelector.baseName = inputVolume.GetName() + " stripped"
         #     self.ui.outputSegmentationSelector.baseName = inputVolume.GetName() + " mask"
@@ -235,12 +219,12 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
     ###  onZoneButton                                                                 #####
     #######################################################################################
     def onApplyButton(self):
-        pythonScriptPath = os.path.dirname(slicer.util.modulePath(self.moduleName))+'/BrainZoneClassifier.py'
+        pythonScriptPath = os.path.dirname(slicer.util.modulePath(self.moduleName))+'/vCastSlicer.py'
         # Update directory for widget
         self._dir_chosen = self._tmp_dir
         slicer.util.showStatusMessage("START Zone Detection")
         print ("RUN Zone Detection Algorithm")
-        BrainZoneClassifierLogic().runZoneDetection(str(self.ui.vCastSenderSelector.currentPath), pythonScriptPath)
+        vCastSlicerLogic().runZoneDetection(str(self.ui.vCastSenderSelector.currentPath), pythonScriptPath)
         print ("END Zone Detection Algorithm")
         slicer.util.showStatusMessage("END Zone Detection")
     
@@ -251,7 +235,7 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
             if element.text == "vCastSender":
                 add_widget = False
         if add_widget:        
-            moduleIcon = qt.QIcon(self.resourcePath('Icons/BrainZoneClassifier.png'))
+            moduleIcon = qt.QIcon(self.resourcePath('Icons/vCastSlicer.png'))
             self.StyleAction = mainToolBar.addAction(moduleIcon, "vCastSender")
             self.StyleAction.triggered.connect(self.toggleStyle)
         
@@ -279,10 +263,10 @@ class BrainZoneClassifierWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
 
 #########################################################################################
 ####                                                                                 ####
-#### BrainZoneClassifierLogic                                                          ####
+#### vCastSlicerLogic                                                          ####
 ####                                                                                 ####
 #########################################################################################
-class BrainZoneClassifierLogic(ScriptedLoadableModuleLogic):
+class vCastSlicerLogic(ScriptedLoadableModuleLogic):
     """
   """
 
@@ -299,12 +283,8 @@ class BrainZoneClassifierLogic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
     def runZoneDetection(self, vCastSenderPath, pythonScriptPath):
-        print(f'Path: {vCastSenderPath}')
-        line_to_replace = 'self._dir_chosen = ""'
+        line_to_replace = r'self._dir_chosen = ".*"'
         replacement = f'self._dir_chosen = "{vCastSenderPath}"'
-        print(type(vCastSenderPath))
-        print(type(replacement))
-        print((pythonScriptPath, line_to_replace, replacement))
         self.replacer(pythonScriptPath, line_to_replace, replacement)
     
     def replacer(self, file_path, pattern, subst):
@@ -315,10 +295,9 @@ class BrainZoneClassifierLogic(ScriptedLoadableModuleLogic):
                 cond = True # Condition to only replace first match
                 i = 0 # id to avoid touching this function
                 for line in old_file:
-                    tmp_line = line.replace(pattern, subst)
                     # Get new line based on conditions
                     if cond and (i<280):
-                        tmp_line = line.replace(pattern, subst)
+                        tmp_line = re.sub(pattern, subst, line)
                         # Update condition
                         if line != tmp_line:
                             cond = False

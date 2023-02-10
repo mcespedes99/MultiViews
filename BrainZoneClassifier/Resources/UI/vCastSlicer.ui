@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>BrainZoneClassifier</class>
- <widget class="qMRMLWidget" name="BrainZoneClassifier">
+ <widget class="qMRMLWidget" name="vCastSlicer">
   <property name="geometry">
    <rect>
     <x>0</x>
