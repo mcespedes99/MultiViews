@@ -14,7 +14,7 @@ from shutil import move, copymode
 from os import fdopen, remove
 
 #
-# vCastSlicer. Based on the code from https://github.com/mnarizzano/SEEGA
+# vCastSlicer. Module to connect 3D Slicer with vCastSender application.
 #
 
 class vCastSlicer(ScriptedLoadableModule):
@@ -26,19 +26,70 @@ class vCastSlicer(ScriptedLoadableModule):
         ScriptedLoadableModule.__init__(self, parent)
         self.parent.title = "vCastSlicer"
         self.parent.categories = ["Multiviews"]
+        self._dir_chosen = "" # Saves path to vCast exe file
         self.parent.dependencies = []
         self.parent.contributors = ["Mauricio Cespedes Tenorio (Western University)"]
         self.parent.helpText = """
-    This tool localize the brain zone of a set of points choosen from a markups 
-    """
+        This tool is made to connect vCastSender application with 3D Slicer.
+        """
         self.parent.acknowledgementText = """
-This module was originally developed by Mauricio Cespedes Tenorio (Western University) as part
-of the extension <a href="https://github.com/mnarizzano/SEEGA">Multiviews</a>.
-""" 
+        This module was originally developed by Mauricio Cespedes Tenorio (Western University) as part
+        of the extension Multiviews.
+        """ # <a href="https://github.com/mnarizzano/SEEGA">Multiviews</a>
 
+        # Add app icon when application has started up
+        if not slicer.app.commandOptions().noMainWindow:
+            slicer.app.connect("startupCompleted()", self.modifyWindowUI)
+
+    def modifyWindowUI(self):
+        """
+        Function to add custom icon to toolbar.
+        """
+        # Look for ModuleToolBar in the mainWindow
+        mainToolBar = slicer.util.findChild(slicer.util.mainWindow(), 'ModuleToolBar')
+        # This condition is made to avoid multiple repetitions of the icon
+        add_widget = True
+        # Look for elements in the toolbar to search for any instances of vCastSender
+        for element in mainToolBar.actions():
+            if element.text == "vCastSender":
+                add_widget = False
+        # If the vCastSender icon is not in the toolbar
+        if add_widget:
+            iconPath = os.path.join(os.path.dirname(__file__), 'Resources/Icons/vCastSlicer.png')    
+            moduleIcon = qt.QIcon(iconPath)
+            self.StyleAction = mainToolBar.addAction(moduleIcon, "vCastSender")
+            self.StyleAction.triggered.connect(self.toggleStyle)
+    
+    def toggleStyle(self):
+        """
+        Function to set behavior of custom icon on click.
+        """
+        # Message box to give instructions related to vCastSender
+        msgbox = qt.QMessageBox()
+        # Set style of the message box
+        msgbox.setStyleSheet("QLabel{min-width: 700px;}")
+        msgbox.setWindowTitle("vCastSender will open.")
+        msgbox.setInformativeText("After vCastSender is opened, click 'Device List' and choose your ViewSonic device.")
+        msgbox.setStandardButtons(qt.QMessageBox.Cancel | qt.QMessageBox.Ok)
+        msgbox.setDefaultButton(qt.QMessageBox.Ok)
+        ret = msgbox.exec()
+        # If Ok Button is pressed and a vCastSender path has been set
+        if ret == qt.QMessageBox.Ok and len(self._dir_chosen)>0:
+            try:
+                import subprocess
+                subprocess.Popen(
+                self._dir_chosen, shell = True
+                )
+            except:
+                slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
+        # If button Cancel is pressed
+        elif ret == qt.QMessageBox.Cancel: 
+            pass
+        else:
+            slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
 
 #
-# Brain Zone DetectorWidget
+# vCastSlicer Widget
 #
 
 class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
@@ -54,17 +105,18 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic = None
         self._parameterNode = None
         self._updatingGUIFromParameterNode = False
-        self._dir_chosen = ""
-        self._tmp_dir = ""
-        self._GUI_added = False
-        self._Nodes_selected = False
+        self._dir_chosen = "" # Saves path to vCast exe file
+        self._tmp_dir = "" # Saves temp path to vCast exe file before clicking on Apply
+        # Defines whether the icon is connected to the function from vCastSlicer class or
+        # the vCastSlicerWidget class.
+        self._IconConnected = False   
 
     def setup(self):
         """
         Called when the user opens the module the first time and the widget is initialized.
         """
         ScriptedLoadableModuleWidget.setup(self)
-        # Custom toolbar for applying style
+        # Add or connect icon in toolbar
         self.modifyWindowUI()
 
         self._loadUI()
@@ -74,11 +126,15 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._setupConnections()
     
     def _loadUI(self):
-        # Load widget from .ui file (created by Qt Designer).
+        """
+        Load widget from .ui file (created by Qt Designer).
+        """
         # Additional widgets can be instantiated manually and added to self.layout.
         uiWidget = slicer.util.loadUI(self.resourcePath('UI/vCastSlicer.ui'))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
+        # UI boot configuration of 'Apply' button and the input box. 
+        # If there's a valid path set, it's displayed in the input box and the apply button is enabled.
         if (len(self._dir_chosen)>0 and os.path.isfile(self._dir_chosen)) and self._dir_chosen.endswith('vCastSender.exe'):
             self.ui.vCastSenderSelector.setCurrentPath(self._dir_chosen)
             self.ui.applyButton.toolTip = "Set directory"
@@ -192,10 +248,15 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._updatingGUIFromParameterNode = False
 
     def onDirectoryChange(self):
+        """
+        Function to enable/disable 'Apply' button depending on the selected file
+        """
         self._tmp_dir = str(self.ui.vCastSenderSelector.currentPath)
+        # If the selected file is a valid one, the button is enabled.
         if (len(self._tmp_dir)>0 and os.path.isfile(self._tmp_dir)) and self._tmp_dir.endswith('vCastSender.exe'):
             self.ui.applyButton.toolTip = "Set directory"
             self.ui.applyButton.enabled = True
+        # Else, it is disabled.
         else:
             self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
             self.ui.applyButton.enabled = False
@@ -215,41 +276,48 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self._parameterNode.EndModify(wasModified)
 
-    #######################################################################################
-    ###  onZoneButton                                                                 #####
-    #######################################################################################
     def onApplyButton(self):
+        """
+        Configures the behavior of 'Apply' button by connecting it to the logic function.
+        """
+        # Path to this script
         pythonScriptPath = os.path.dirname(slicer.util.modulePath(self.moduleName))+'/vCastSlicer.py'
-        # Update directory for widget
+        # Update directory to vCastSender exe file.
         self._dir_chosen = self._tmp_dir
-        slicer.util.showStatusMessage("START Zone Detection")
-        print ("RUN Zone Detection Algorithm")
         vCastSlicerLogic().runZoneDetection(str(self.ui.vCastSenderSelector.currentPath), pythonScriptPath)
-        print ("END Zone Detection Algorithm")
-        slicer.util.showStatusMessage("END Zone Detection")
     
+    # Function to add icon
     def modifyWindowUI(self):
+        # Look for ModuleToolBar in the mainWindow
         mainToolBar = slicer.util.findChild(slicer.util.mainWindow(), 'ModuleToolBar')
-        add_widget = True
-        for element in mainToolBar.actions():
+        # Variable that saved id of vCast Icon if found
+        vCastIconIdx = None
+        for idx,element in enumerate(mainToolBar.actions()):
             if element.text == "vCastSender":
-                add_widget = False
-        if add_widget:        
+                vCastIconIdx = idx
+        # If vCast Icon was not found, it's added to the toolbar
+        if vCastIconIdx ==  None:        
             moduleIcon = qt.QIcon(self.resourcePath('Icons/vCastSlicer.png'))
             self.StyleAction = mainToolBar.addAction(moduleIcon, "vCastSender")
             self.StyleAction.triggered.connect(self.toggleStyle)
-        
+        # Reset connection (as it was started with the connection from vCastSlicer class)
+        elif self._IconConnected == False:
+            self._IconConnected = True
+            mainToolBar.actions()[idx].triggered.disconnect()
+            mainToolBar.actions()[idx].triggered.connect(self.toggleStyle)
+
+    # Function to set behavior of icon on click
     def toggleStyle(self):
-        print('aqui slicer')
+        # Message box to give instructions related to vCastSender
         msgbox = qt.QMessageBox()
-        # font = qt.QFont()
-        # font.setBold(True)
+        # Set style of the message box
         msgbox.setStyleSheet("QLabel{min-width: 700px;}")
         msgbox.setWindowTitle("vCastSender will open.")
         msgbox.setInformativeText("After vCastSender is opened, click 'Device List' and choose your ViewSonic device.")
         msgbox.setStandardButtons(qt.QMessageBox.Cancel | qt.QMessageBox.Ok)
         msgbox.setDefaultButton(qt.QMessageBox.Ok)
         ret = msgbox.exec()
+        # If Ok Button is pressed and a vCastSender path has been set
         if ret == qt.QMessageBox.Ok and len(self._dir_chosen)>0:
             try:
                 import subprocess
@@ -258,6 +326,9 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 )
             except:
                 slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
+        # If button Cancel is pressed
+        elif ret == qt.QMessageBox.Cancel: 
+            pass
         else:
             slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
 
@@ -283,24 +354,32 @@ class vCastSlicerLogic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
     def runZoneDetection(self, vCastSenderPath, pythonScriptPath):
+        """
+        Updates this file by changing the default _dir_chosen attribute from
+        the vCastSlicer and vCastSlicerWidget classes so that the next time
+        3D Slicer is launched, the directory to vCastSender.exe is saved.
+        """
         line_to_replace = r'self._dir_chosen = ".*"'
         replacement = f'self._dir_chosen = "{vCastSenderPath}"'
         self.replacer(pythonScriptPath, line_to_replace, replacement)
     
     def replacer(self, file_path, pattern, subst):
+        """
+        Method to replace a specific pattern in a file to a substitute text.
+        """
         #Create temp file to write updates
         fh, abs_path = mkstemp()
         with fdopen(fh,'w') as new_file:
             with open(file_path) as old_file:
-                cond = True # Condition to only replace first match
+                cond = 0 # Condition to only replace first 2 matches
                 i = 0 # id to avoid touching this function
                 for line in old_file:
                     # Get new line based on conditions
-                    if cond and (i<280):
+                    if (cond<2) and (i<280):
                         tmp_line = re.sub(pattern, subst, line)
                         # Update condition
                         if line != tmp_line:
-                            cond = False
+                            cond += 1
                     else:
                         tmp_line = line
                     # Write line
