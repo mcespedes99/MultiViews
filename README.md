@@ -1,2 +1,21 @@
 # MultiViews
-Project related to visualization in multiple devices for 3D Slicer
+
+This repository is part of a project focused on the visualization of 3D Slicer in multiple devices, including ViewSonic Boards and HoloLens. Currently, only the connection to ViewSonic Boards has been implemented.
+
+## ViewBoard connection
+### Motivation
+
+### Usage
+This module works through the vCastSender app. It is required to install vCastSender app for this module to work.\
+After installing the extension, an icon should appear in the top of the application:\
+*Insert image\
+If you click on this icon without configuring the path to the vCastSender exe file, an error will pop up.
+
+To configure the executable path, use the following steps:
+
+1. Click on 'Module list' and select the vCastSlicer module under Multiviews.
+2. Insert a valid path to the vCastSender executable file, usually located under ``` C:\Program Files (x86)\Viewsonic ```. You can also click on the three dots widget next to the input space and select the file directly from the file manager. 
+3. The 'Apply' button will be disabled until a valid path is entered.
+4. After inputing a valid path to the executable file, hit on 'Apply'. A new window will pop up indicating that the change was performed successfully.
+5. Now, you should be able to click on the widget on the toolbar (top of the screen) and vCastSender should be opened.
+6. Once vCastSender is open, click on 'Device List', select the board that you want to connect to, input the PIN code and hit on Cast. By this moment, you should be able to see 3D slicer in your Viewsonic device.
