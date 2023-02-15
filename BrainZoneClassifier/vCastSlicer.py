@@ -106,7 +106,7 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode = None
         self._updatingGUIFromParameterNode = False
         self._dir_chosen = "" # Saves path to vCast exe file
-        self._tmp_dir = "" # Saves temp path to vCast exe file before clicking on Apply
+        self._tmp_dir = self._dir_chosen # Saves temp path to vCast exe file before clicking on Apply
         # Defines whether the icon is connected to the function from vCastSlicer class or
         # the vCastSlicerWidget class.
         self._IconConnected = False   
@@ -137,8 +137,8 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If there's a valid path set, it's displayed in the input box and the apply button is enabled.
         if (len(self._dir_chosen)>0 and os.path.isfile(self._dir_chosen)) and self._dir_chosen.endswith('vCastSender.exe'):
             self.ui.vCastSenderSelector.setCurrentPath(self._dir_chosen)
-            self.ui.applyButton.toolTip = "Set directory"
-            self.ui.applyButton.enabled = True
+            self.ui.applyButton.toolTip = "Please select a new path to vCastSender.exe"
+            self.ui.applyButton.enabled = False
         else:
             self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
             self.ui.applyButton.enabled = False
@@ -253,9 +253,13 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         self._tmp_dir = str(self.ui.vCastSenderSelector.currentPath)
         # If the selected file is a valid one, the button is enabled.
-        if (len(self._tmp_dir)>0 and os.path.isfile(self._tmp_dir)) and self._tmp_dir.endswith('vCastSender.exe'):
+        if (len(self._tmp_dir)>0 and os.path.isfile(self._tmp_dir)) and self._tmp_dir.endswith('vCastSender.exe') and (self._tmp_dir != self._dir_chosen):
             self.ui.applyButton.toolTip = "Set directory"
             self.ui.applyButton.enabled = True
+        # A path has already been set. 
+        elif len(self._tmp_dir)>0 and (self._tmp_dir == self._dir_chosen):
+            self.ui.applyButton.toolTip = "Please select a new path to vCastSender.exe"
+            self.ui.applyButton.enabled = False
         # Else, it is disabled.
         else:
             self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
@@ -284,7 +288,16 @@ class vCastSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         pythonScriptPath = os.path.dirname(slicer.util.modulePath(self.moduleName))+'/vCastSlicer.py'
         # Update directory to vCastSender exe file.
         self._dir_chosen = self._tmp_dir
-        vCastSlicerLogic().runZoneDetection(str(self.ui.vCastSenderSelector.currentPath), pythonScriptPath)
+        vCastSlicerLogic().runZoneDetection(str(self.ui.vCastSenderSelector.currentPath), pythonScriptPath)\
+        # Update the state of the apply button
+        self.ui.applyButton.toolTip = "Please select a new path to vCastSender.exe"
+        self.ui.applyButton.enabled = False
+        # Display message to indicate that the path was successfully updated
+        msgbox = qt.QMessageBox()
+        # Set style of the message box
+        msgbox.setStyleSheet("QLabel{min-width: 500px;}")
+        msgbox.setInformativeText("Path to vCastSender succesfully updated!")
+        ret = msgbox.exec()
     
     # Function to add icon
     def modifyWindowUI(self):
@@ -392,3 +405,36 @@ class vCastSlicerLogic(ScriptedLoadableModuleLogic):
         remove(file_path)
         #Move new file
         move(abs_path, file_path)
+
+
+class vCastSlicerTest(ScriptedLoadableModuleTest):
+  """
+  This is the test case for your scripted module.
+  Uses ScriptedLoadableModuleTest base class, available at:
+  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
+  """
+
+  def setUp(self):
+    """ Do whatever is needed to reset the state - typically a scene clear will be enough.
+    """
+    slicer.mrmlScene.Clear(0)
+
+  def runTest(self):
+    """Run as few or as many tests as needed here.
+    """
+    self.setUp()
+    self.test_vCastSlicer1()
+
+  def test_vCastSlicer1(self):
+    """ Ideally you should have several levels of tests.  At the lowest level
+    tests should exercise the functionality of the logic with different inputs
+    (both valid and invalid).  At higher levels your tests should emulate the
+    way the user would interact with your code and confirm that it still works
+    the way you intended.
+    One of the most important features of the tests is that it should alert other
+    developers when their changes will have an impact on the behavior of your
+    module.  For example, if a developer removes a feature that you depend on,
+    your test should break so they know that the feature is needed.
+    """
+
+    self.delayDisplay("No tests are implemented")
