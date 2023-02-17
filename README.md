@@ -26,11 +26,11 @@ To configure the executable path, use the following steps:
 
 4. After inputing a valid path to the executable file, hit on 'Apply'. A new window will pop up indicating that the change was performed successfully.
 
-<p align="center"><img src="resources/imgs/Path_updated.PNG" alt="path" width="40%"/></p>
+<p align="center"><img src="resources/imgs/Path_updated.PNG" alt="path" width="50%"/></p>
 
 5. Now, you should be able to click on the widget on the toolbar (top of the screen) and vCastSender should be opened.
 
-<p align="center"><img src="resources/imgs/vCastMessage.PNG" alt="vcast" width="50%"/></p>
+<p align="center"><img src="resources/imgs/vCastMessage.PNG" alt="vcast" width="60%"/></p>
 
 6. Once vCastSender is open, click on 'Device List', select the board that you want to connect to, input the PIN code and hit on Cast. By this moment, you should be able to see 3D slicer in your Viewsonic device.
 
@@ -39,4 +39,4 @@ A few notes:
 * After the initial setup, the 'Apply' button will be disabled. If the executable location changed, just select the new file and the button should change its state to enabled.
 * After installing this extension, it is not possible to uninstall SlicerVR without uninstalling this extension as well. If you uninstall SlicerVR, when Slicer reboots, it will automatically reinstall it. 
 
-<p align="center"><img src="resources/imgs/SlicerVR.PNG" alt="slicervr" width="40%"/></p>
+<p align="center"><img src="resources/imgs/SlicerVR.PNG" alt="slicervr" width="50%"/></p>
