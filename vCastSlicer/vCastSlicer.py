@@ -40,6 +40,8 @@ class vCastSlicer(ScriptedLoadableModule):
         # Add app icon when application has started up
         if not slicer.app.commandOptions().noMainWindow:
             slicer.app.connect("startupCompleted()", self.modifyWindowUI)
+            slicer.app.connect("startupCompleted()", self.checkSlicerVR)
+            
 
     def modifyWindowUI(self):
         """
@@ -87,6 +89,34 @@ class vCastSlicer(ScriptedLoadableModule):
             pass
         else:
             slicer.util.errorDisplay("Failed to open the exe file. Please verify the path.")
+
+    def checkSlicerVR(self):
+        """
+        Function to verify if SlicerVR is installed.
+        """
+        extensionName = 'SlicerVirtualReality'
+        manager = slicer.app.extensionsManagerModel()
+        if not manager.isExtensionInstalled(extensionName):
+            print(f"Installing {extensionName}...")
+            slicer.util.mainWindow().initialWindowShown.connect(self.installSlicerVR())
+        else:
+            print(f'{extensionName} is already installed.')
+    
+    def installSlicerVR(self):
+        """
+        Function to install SlicerVR extension.
+        """
+        extensionName = 'SlicerVirtualReality'
+        manager = slicer.app.extensionsManagerModel()
+        extensionMetaData = manager.retrieveExtensionMetadataByName(extensionName)
+        manager.downloadAndInstallExtension(extensionMetaData['extension_id'])
+        # Display message to indicate that SlicerVR was installed and the app will be restarted.
+        msgbox = qt.QMessageBox()
+        # Set style of the message box
+        msgbox.setStyleSheet("QLabel{min-width: 500px;}")
+        msgbox.setInformativeText("SlicerVR successfully installed. Please restart the application to apply the changes.")
+        ret = msgbox.exec()
+
 
 #
 # vCastSlicer Widget
