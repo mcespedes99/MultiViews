@@ -4,6 +4,7 @@ This repository is part of a project focused on the visualization of 3D Slicer i
 
 ## ViewBoard connection
 ### Motivation
+3D Slicer is a highly used application for the analysis and processing of medical imaging data. Recent efforts have focused on extending its usability from computers to other devices by the addition of features such as touchscreen and Virtual Reality (VR) capabilities. This project is intented to centralize the visualization of 3D Slicer in multiple devices in one extension, including VR lenses, touchscreen ViewSonic Boards and HoloLens; which is intented to easy the transitioning between the different modalities for the users. 
 
 ### Usage
 This module works through the vCastSender app. It is required to install vCastSender app for this module to work.\
